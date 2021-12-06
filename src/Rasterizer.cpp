@@ -4,9 +4,6 @@
 #include <tuple>
 #include "Rasterizer.h"
 #include "Triangle.h"
-#define BOUND_CHECK 0
-#define BOUND_CHECK_RAST 0
-
 
 using Scalar = Rasterizer::Scalar;
 using Dimension = Rasterizer::Dimension;
@@ -91,6 +88,17 @@ void Rasterizer::AddModel(
     const Matrix4 &to_noc,
     const std::vector<Rasterizer::Normal> &normals
 ) {
+    if (m_used_ids.count(idx)) {
+        throw std::runtime_error(
+            "Model id " + std::to_string(idx) + " is already used!"
+        );
+    }
+    if (idx < 1) {
+        throw std::runtime_error(
+            "Model id must be > 0, got " + std::to_string(idx)
+        );
+    }
+
     Mesh mesh(indices.size());
     for (int i = 0; i < mesh.size(); ++i) {
         const auto index = indices[i];
@@ -98,72 +106,18 @@ void Rasterizer::AddModel(
             points[index[0]], 
             points[index[1]], 
             points[index[2]]
-            /*points.at(index[0]),
-            points.at(index[1]),
-            points.at(index[2])*/
         };
     }
+    // TODO: Is it the same as emblace_back?
     m_meshes.push_back(std::move(mesh));
 
     m_mesh_ids.push_back(idx);
+    m_used_ids.insert(idx);
     m_to_nocs.push_back(to_noc);
 
-    // Register vertex normals
-    // std::cout<<m_has_normals<<"\n";
     if (m_has_normals) {
         m_normals.push_back(normals);
     }
-        // simply set face normals
-
-        // Compute vertex normals
-        /*Normals vertex_normals(points.size(), Normal::Zero());
-        std::vector<int> counts(vertex_normals.size(), 0);
-        for (int i = 0; i < indices.size(); ++i) {
-            const auto &normal = normals[i];
-            const auto &index = indices[i];
-            for (auto k : index) {
-#if BOUND_CHECK
-                counts.at(k)++;
-                vertex_normals.at(k) += normal;
-#else
-                counts[k]++;
-                vertex_normals[k] += normal;
-#endif
-            }
-        }
-        for (int i = 0; i < vertex_normals.size(); ++i) {
-            if (counts[i] > 0) {
-#if BOUND_CHECK
-                vertex_normals.at(i) /= static_cast<Scalar>(counts.at(i));
-#else
-                vertex_normals[i] /= static_cast<Scalar>(counts[i]);
-#endif
-            }
-        }
-
-        // Register vertex normals to mesh
-        Mesh mesh_normals(indices.size());
-        for (int i = 0; i < indices.size(); ++i) {
-            const auto &index = indices[i];
-#if BOUND_CHECK
-            mesh_normals[i] = {
-                vertex_normals.at(index[0]),
-                vertex_normals.at(index[1]),
-                vertex_normals.at(index[2])
-            };
-#else
-            mesh_normals[i] = {
-                vertex_normals[index[0]],
-                vertex_normals[index[1]],
-                vertex_normals[index[2]]
-            };
-#endif
-        }
-        // printf("Size: %d\n", mesh_normals.size());
-        m_normals.push_back(std::move(mesh_normals));
-    } else {  // dummy
-        m_normals.push_back(Mesh());
-    }*/
 }
 
 void Rasterizer::ClearModels() {
@@ -250,14 +204,6 @@ void Rasterizer::Rasterize() {
                             // Make the normal update
                             if (m_has_normals) {
                                 const Normal normal = normals[k];
-                                // printf("%d -> %d\n", k, normals.size());
-                                /*const Normal normal = triangle.Interp(
-#if BOUND_CHECK_RAST
-                                    normals.at(k), bary
-#else
-                                    normals[k], bary
-#endif
-                                );*/
                                 m_normal_grid({y, x, 0}) = normal.x();
                                 m_normal_grid({y, x, 1}) = normal.y();
                                 m_normal_grid({y, x, 2}) = normal.z();

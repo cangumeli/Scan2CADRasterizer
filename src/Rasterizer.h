@@ -1,9 +1,9 @@
 #ifndef SCAN2CAD_RASTERIZER_RASTERIZER_H
 #define SCAN2CAD_RASTERIZER_RASTERIZER_H
 
+#include <unordered_set>
 #include <Eigen/Dense>
 #include "Grid.h"
-
 
 class Rasterizer {
 
@@ -89,7 +89,8 @@ private:
     std::vector<MeshIndex> m_mesh_ids;
     std::vector<Matrix4> m_to_nocs;
     std::vector<Normals> m_normals;
-};
 
+    std::unordered_set<MeshIndex> m_used_ids;
+};
 
 #endif

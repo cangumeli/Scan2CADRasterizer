@@ -5,6 +5,19 @@
 
 namespace py = pybind11;
 
+template <typename DataType, int ndims = 1>
+py::array_t<DataType> MakePyArray(Grid<DataType, ndims> &grid) {
+    py::buffer_info info(
+        grid.GetData(),                               /* Pointer to buffer */
+        sizeof(DataType),                       /* Size of one scalar */
+        py::format_descriptor<DataType>::format(), /* Python struct-style format descriptor */
+        grid.GetDims(),                                      /* Number of dimensions */
+        grid.GetSize(),                 /* Buffer dimensions */
+        grid.GetByteStrides() /* Strides (in bytes) for each index */
+    );
+    return py::array_t<Rasterizer::Scalar>(info);
+}
+
 PYBIND11_MODULE(scan2cad_rasterizer, m) {
     m.doc() = R"pbdoc(
         Documentation work in progress
@@ -52,46 +65,20 @@ PYBIND11_MODULE(scan2cad_rasterizer, m) {
             */
 
             .def("read_depth", [](Rasterizer &self) {
-                auto &depth = self.GetDepth();
-
-                py::buffer_info info(
-                    depth.GetData(),                               /* Pointer to buffer */
-                    sizeof(Rasterizer::Scalar),                          /* Size of one scalar */
-                    py::format_descriptor<Rasterizer::Scalar>::format(), /* Python struct-style format descriptor */
-                    depth.GetDims(),                                      /* Number of dimensions */
-                    depth.GetSize(),                 /* Buffer dimensions */
-                    depth.GetByteStrides()
-                );
-                return py::array_t<Rasterizer::Scalar>(info);
+                return MakePyArray<Rasterizer::Scalar, 2>(self.GetDepth());
             })
 
             .def("read_idx", [](Rasterizer &self) {
-                auto &id = self.GetID();
-
-                py::buffer_info info(
-                    id.GetData(),                               /* Pointer to buffer */
-                    sizeof(Rasterizer::Index),                          /* Size of one scalar */
-                    py::format_descriptor<Rasterizer::MeshIndex>
-                        ::format(), /* Python struct-style format descriptor */
-                    id.GetDims(),                                      /* Number of dimensions */
-                    id.GetSize(),                 /* Buffer dimensions */
-                    id.GetByteStrides() /* Strides (in bytes) for each index */
-                );
-                return py::array_t<Rasterizer::Index>(info);
+                return MakePyArray<Rasterizer::MeshIndex, 2>(self.GetID());
             })
 
             .def("read_noc", [](Rasterizer &self) {
-                auto &noc = self.GetNOC();
+                return MakePyArray<Rasterizer::Scalar, 3>(self.GetNOC());
+            })
 
-                py::buffer_info info(
-                    noc.GetData(),                               /* Pointer to buffer */
-                    sizeof(Rasterizer::Scalar),                          /* Size of one scalar */
-                    py::format_descriptor<Rasterizer::Scalar>::format(), /* Python struct-style format descriptor */
-                    noc.GetDims(),                                      /* Number of dimensions */
-                    noc.GetSize(),                 /* Buffer dimensions */
-                    noc.GetByteStrides() /* Strides (in bytes) for each index */
-                );
-                return py::array_t<Rasterizer::Scalar>(info);
+            .def("read_color", [](Rasterizer &self) {
+                auto &grid = self.GetColorGrid();
+                return MakePyArray<Rasterizer::Color::Scalar, 3>(grid);
             })
 
             .def("read_intrinsics", [](Rasterizer &self) {
@@ -118,15 +105,7 @@ PYBIND11_MODULE(scan2cad_rasterizer, m) {
 
             .def("read_normals", [](Rasterizer &self) {
                 auto &normals = self.GetNormalGrid();
-                py::buffer_info info(
-                    normals.GetData(),                               /* Pointer to buffer */
-                    sizeof(Rasterizer::Scalar),                          /* Size of one scalar */
-                    py::format_descriptor<Rasterizer::Scalar>::format(), /* Python struct-style format descriptor */
-                    normals.GetDims(),                                      /* Number of dimensions */
-                    normals.GetSize(),                 /* Buffer dimensions */
-                    normals.GetByteStrides() /* Strides (in bytes) for each index */
-                );
-                return py::array_t<Rasterizer::Scalar>(info);
+                return MakePyArray<Rasterizer::Scalar, 3>(normals);
             })
 
             /*

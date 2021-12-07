@@ -125,6 +125,21 @@ void Rasterizer::ClearModels() {
     m_to_nocs.clear();
     m_mesh_ids.clear();
     m_normals.clear();
+    m_used_ids.clear();
+    m_mesh_colors.clear();
+    m_has_colors = false;
+}
+
+void Rasterizer::SetColors(const std::unordered_map<MeshIndex, Color> &colors) {
+    for (auto i : m_mesh_ids) {
+        auto color = colors.find(i);
+        if (color == colors.end()) {
+            m_mesh_colors[i] = DEFAULT_COLOR;
+        } else {
+            m_mesh_colors[i] = color->second;
+        }
+    }
+    m_has_colors = true;
 }
 
 inline std::tuple<Triangle<Scalar>, bool>
@@ -254,4 +269,9 @@ void Rasterizer::Rasterize() {
             }
         }
     }
+}
+
+void Rasterizer::RenderColors() {
+    // if no colors, use grey
+    // if no normals, render w/o shading
 }

@@ -61,6 +61,7 @@ public:
     ID &GetID() { return m_id; }
     NormalGrid &GetNormalGrid() { return m_normal_grid; }
     ColorGrid &GetColorGrid() { return m_color_grid; }
+    
 
     void AddModel(
         const std::vector<Vector3i> &indices,
@@ -75,15 +76,17 @@ public:
     bool RenderingNOC() const { return m_render_noc; }
     bool HasNormals() const { return m_has_normals; }
     bool HasColor() const { return m_has_colors; }
+    std::vector<bool> &GetVisible() { return m_visible; }
 
     void Rasterize();
-    void RenderColors();
+    void RenderColors(float normal_coef=0.3);
 
 private:
     const Dimension m_height;
     const Dimension m_width;
     const bool m_render_noc;
     const bool m_has_normals;
+    bool m_rasterized = false;
     bool m_has_colors = false;
 
     Matrix4 m_camera_mat = Matrix4::Identity();
@@ -103,7 +106,7 @@ private:
 
     std::unordered_set<MeshIndex> m_used_ids;
     std::unordered_map<MeshIndex, Color> m_mesh_colors;
-
+    std::vector<bool> m_visible;
 };
 
 #endif

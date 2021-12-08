@@ -43,6 +43,7 @@ public:
     size_t GetNumEl() const { return m_numel; }
     Size GetStrides() const { return m_strides; }
     size_t GetDims() const { return dims; }
+    bool IsEmpty() { return GetNumEl() == 0; }
 
     Size GetByteStrides() const {
         Size byte_strides = m_strides;

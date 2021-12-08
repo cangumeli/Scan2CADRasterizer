@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <numeric>
@@ -89,28 +90,37 @@ void Rasterizer::AddModel(
     const std::vector<Rasterizer::Normal> &normals
 ) {
     if (m_used_ids.count(idx)) {
-        throw std::runtime_error(
+        throw std::invalid_argument(
             "Model id " + std::to_string(idx) + " is already used!"
         );
     }
     if (idx < 1) {
-        throw std::runtime_error(
+        throw std::invalid_argument(
             "Model id must be > 0, got " + std::to_string(idx)
         );
     }
 
-    Mesh mesh(indices.size());
-    for (int i = 0; i < mesh.size(); ++i) {
-        const auto index = indices[i];
-        mesh[i] = { 
-            points[index[0]], 
-            points[index[1]], 
-            points[index[2]]
-        };
+    auto cmp = [](Vector3 p1, Vector3 p2) { return p1.z() < p2.z(); };
+    Vector3 min_point = *std::min_element(points.begin(), points.end(), cmp);
+    bool visible = min_point.z() > 0;
+
+    if (visible) {
+        Mesh mesh(indices.size());
+        for (int i = 0; i < mesh.size(); ++i) {
+            const auto index = indices[i];
+            mesh[i] = { 
+                points[index[0]], 
+                points[index[1]], 
+                points[index[2]]
+            };
+        }
+        m_meshes.push_back(std::move(mesh));
+    } else {
+        m_meshes.push_back(Mesh());
     }
     // TODO: Is it the same as emblace_back?
-    m_meshes.push_back(std::move(mesh));
 
+    m_visible.push_back(visible);
     m_mesh_ids.push_back(idx);
     m_used_ids.insert(idx);
     m_to_nocs.push_back(to_noc);
@@ -127,7 +137,9 @@ void Rasterizer::ClearModels() {
     m_normals.clear();
     m_used_ids.clear();
     m_mesh_colors.clear();
+    m_visible.clear();
     m_has_colors = false;
+    m_rasterized = false;
 }
 
 void Rasterizer::SetColors(const std::unordered_map<MeshIndex, Color> &colors) {
@@ -185,6 +197,8 @@ void Rasterizer::Rasterize() {
     if (m_has_normals) {
         m_normal_grid.Fill(0);
     }
+
+    m_rasterized = true;
 
     // Render mesh ids and z-buffer (depth)
     for (int i = 0; i < m_meshes.size(); ++i) {
@@ -271,7 +285,51 @@ void Rasterizer::Rasterize() {
     }
 }
 
-void Rasterizer::RenderColors() {
-    // if no colors, use grey
-    // if no normals, render w/o shading
+void Rasterizer::RenderColors(float normal_coef) {
+    if (normal_coef < 0 || normal_coef > 1) {
+        throw std::invalid_argument(
+            "normal_coef must be in [0, 1], got " + std::to_string(normal_coef)
+        );
+    }
+    if (!m_rasterized) {
+        throw std::runtime_error("Models are not rasterized!");
+    }
+
+    // Reset the color grid
+    if (m_color_grid.IsEmpty()) {
+        m_color_grid.Init({m_height, m_width, 3});
+    } else {
+        m_color_grid.Fill(0);
+    }
+
+    // Set colors
+    bool shade = m_has_normals && normal_coef > 0;
+    for (Index i = 0; i < m_height; ++i) {
+        for (Index j = 0; j < m_width; ++j) {
+            auto id = m_id({i, j});
+            if (id != 0) {
+                // Compute color
+                Color color;
+                auto id_color = m_mesh_colors.find(id);
+                if (id_color == m_mesh_colors.end()) {
+                    color = DEFAULT_COLOR;
+                } else {
+                    color = id_color->second;
+                }
+                if (shade) {
+                    decltype(color) normal(
+                        m_normal_grid({i, j, 0}),
+                        m_normal_grid({i, j, 1}),
+                        m_normal_grid({i, j, 2})
+                    );
+                    color = (1 - normal_coef) * color.array()
+                        + normal_coef * normal.dot(color);
+                }
+                // Save color
+                m_color_grid({i, j, 0}) = color.x();
+                m_color_grid({i, j, 1}) = color.y();
+                m_color_grid({i, j, 2}) = color.z();
+            }
+        }
+    }
 }

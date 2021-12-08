@@ -45,6 +45,9 @@ Rasterizer::Rasterizer(
     if (render_noc) {
         m_noc.Init({m_height, m_width, 3});
     }
+    if (has_normals) {
+        m_normal_grid.Init({m_height, m_width, 3});
+    }
 }
 
 Rasterizer::Rasterizer(
@@ -100,27 +103,28 @@ void Rasterizer::AddModel(
         );
     }
 
-    auto cmp = [](Vector3 p1, Vector3 p2) { return p1.z() < p2.z(); };
+    /*auto cmp = [](Vector3 p1, Vector3 p2) { return p1.z() < p2.z(); };
     Vector3 min_point = *std::min_element(points.begin(), points.end(), cmp);
-    bool visible = min_point.z() > 0;
+    bool visible = min_point.z() > 0;*/
 
-    if (visible) {
-        Mesh mesh(indices.size());
-        for (int i = 0; i < mesh.size(); ++i) {
-            const auto index = indices[i];
-            mesh[i] = { 
-                points[index[0]], 
-                points[index[1]], 
-                points[index[2]]
-            };
-        }
-        m_meshes.push_back(std::move(mesh));
-    } else {
-        m_meshes.push_back(Mesh());
+    //if (visible) {
+    Mesh mesh(indices.size());
+    for (int i = 0; i < mesh.size(); ++i) {
+        const auto index = indices[i];
+        mesh[i] = { 
+            points[index[0]], 
+            points[index[1]], 
+            points[index[2]]
+        };
     }
     // TODO: Is it the same as emblace_back?
+    m_meshes.push_back(std::move(mesh));
 
-    m_visible.push_back(visible);
+    /*} else {
+        m_meshes.push_back(Mesh());
+    }*/
+
+    // m_visible.push_back(visible);
     m_mesh_ids.push_back(idx);
     m_used_ids.insert(idx);
     m_to_nocs.push_back(to_noc);

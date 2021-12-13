@@ -3,13 +3,14 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
 #include <pybind11/eigen.h>
+#include <pybind11/cast.h>
 
 #include "Rasterizer.h"
 
 namespace py = pybind11;
 
 template <typename DataType, size_t ndims = 1>
-py::array_t<DataType> MakePyArray(Grid<DataType, ndims> &grid) {
+inline py::array_t<DataType> MakePyArray(Grid<DataType, ndims> &grid) {
     py::buffer_info info(
         grid.GetData(),                            /* Pointer to buffer */
         sizeof(DataType),                          /* Size of one scalar */
@@ -21,7 +22,58 @@ py::array_t<DataType> MakePyArray(Grid<DataType, ndims> &grid) {
     return py::array_t<DataType>(info);
 }
 
-void ParseAndAddModel(
+inline auto ParseMesh(
+    const py::array_t<Rasterizer::Index> &faces,
+    const py::array_t<Rasterizer::Scalar> &vertices
+) {
+    auto np_faces = faces.unchecked<2>();
+    auto np_vertices = vertices.unchecked<2>();
+    std::vector<Rasterizer::Vector3i> indices(np_faces.shape(0));
+    std::vector<Rasterizer::Vector3> points(np_vertices.shape(0));
+
+    for (ssize_t i = 0; i < np_faces.shape(0); ++i) {
+        indices[i] = Rasterizer::Vector3i(
+            np_faces(i, 0), np_faces(i, 1), np_faces(i, 2)
+        );
+    }
+    for (ssize_t i = 0; i < np_vertices.shape(0); ++i) {
+        points[i] = Rasterizer::Vector3(
+            np_vertices(i, 0), np_vertices(i, 1), np_vertices(i, 2)
+        );
+    }
+    return std::make_tuple(indices, points);
+}
+
+inline auto ParseMatrix(const py::array_t<Rasterizer::Scalar> &to_noc) {
+    auto np_mat = to_noc.unchecked<2>();
+    Rasterizer::Matrix4 mat;
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            mat(i, j) = 
+                static_cast<Rasterizer::Scalar>(np_mat(i, j));
+        }
+    }
+    return mat;
+}
+
+inline auto ParseNormals(
+    Rasterizer &self,
+    const py::array_t<Rasterizer::Scalar> &face_normals
+) {
+    std::vector<Rasterizer::Normal> normals;
+    if (self.HasNormals()) {
+        auto np_normals = face_normals.unchecked<2>();
+        normals.resize(np_normals.shape(0));
+        for (ssize_t i = 0; i < np_normals.shape(0); ++i) {
+            normals[i] = Rasterizer::Normal(
+                np_normals(i, 0), np_normals(i, 1), np_normals(i, 2)
+            );
+        }
+    }
+    return normals;
+}
+
+inline void ParseAndAddModel(
     Rasterizer &self,
     const py::array_t<Rasterizer::Index> &faces,
     const py::array_t<Rasterizer::Scalar> &vertices,
@@ -29,42 +81,51 @@ void ParseAndAddModel(
     const py::array_t<Rasterizer::Scalar> &to_noc,
     const py::array_t<Rasterizer::Scalar> &face_normals
 ) {
-    auto np_faces = faces.unchecked<2>();
-    auto np_vertices = vertices.unchecked<2>();
-    auto np_mat = to_noc.unchecked<2>();
-    std::vector<Rasterizer::Vector3i> indices(np_faces.shape(0));
-    std::vector<Rasterizer::Vector3> points(np_vertices.shape(0));
-    Rasterizer::Matrix4 mat;
-    // std::cout<<np_faces.shape(0)<<" "<<np_faces.shape(1)<<std::endl;
-    
-    for (ssize_t i = 0; i < np_faces.shape(0); ++i) {
-        indices[i] = Rasterizer::Vector3i(
-            np_faces(i, 0), np_faces(i, 1), np_faces(i, 2)
-        );
-    }
-    for (ssize_t i = 0; i < np_vertices.shape(0); ++i) {
-        // if (i == 0) printf("%d\n", sizeof(np_vertices(0, i)));
-        points[i] = Rasterizer::Vector3(
-            np_vertices(i, 0), np_vertices(i, 1), np_vertices(i, 2)
-        );
-    }
-    for (int i = 0; i < 4; ++i) {
-        for (int j = 0; j < 4; ++j) {
-            mat(i, j) = 
-                static_cast<Rasterizer::Scalar>(np_mat(i, j));
-        }
-    }
-    std::vector<Rasterizer::Normal> normals;
+    auto mesh = ParseMesh(faces, vertices);
+    auto normals = ParseNormals(self, face_normals);
+    auto mat = ParseMatrix(to_noc);
+    self.AddModel(std::get<0>(mesh), std::get<1>(mesh), idx, mat, normals);
+}
+
+inline void ParseAndAddModel(
+    Rasterizer &self,
+    const py::array_t<Rasterizer::Index> &faces,
+    const py::array_t<Rasterizer::Scalar> &vertices,
+    Rasterizer::MeshIndex idx
+) {
+    // TODO: check this logic
     if (self.HasNormals()) {
-        auto np_normals = face_normals.unchecked<2>();
-        normals.reserve(np_normals.shape(0));
-        for (ssize_t i = 0; i < np_normals.shape(0); ++i) {
-            normals.push_back(Rasterizer::Normal(
-                np_normals(i, 0), np_normals(i, 1), np_normals(i, 2)
-            ));
-        }
+        throw std::invalid_argument(
+            "You must provide normals, since has_normals is true"
+        );
     }
-    self.AddModel(indices, points, idx, mat, normals);
+    if (self.RenderingNOC()) {
+        throw std::invalid_argument(
+            "You must provide to_noc, since rendering_noc is true"
+        );
+    }
+    auto mesh = ParseMesh(faces, vertices);
+    auto mat = Rasterizer::Matrix4::Identity();
+    std::vector<Rasterizer::Normal> normals;
+    self.AddModel(std::get<0>(mesh), std::get<1>(mesh), idx, mat, normals);
+}
+
+inline void ParseAndAddModel(
+    Rasterizer &self,
+    const py::array_t<Rasterizer::Index> &faces,
+    const py::array_t<Rasterizer::Scalar> &vertices,
+    Rasterizer::MeshIndex idx,
+    const py::array_t<Rasterizer::Scalar> &face_normals
+) {
+    if (self.RenderingNOC()) {
+        throw std::invalid_argument(
+            "You must provide to_noc, since rendering_noc is true"
+        );
+    }
+    auto mesh = ParseMesh(faces, vertices);
+    auto mat = Rasterizer::Matrix4::Identity();
+    auto normals = ParseNormals(self, face_normals);
+    self.AddModel(std::get<0>(mesh), std::get<1>(mesh), idx, mat, normals);
 }
 
 PYBIND11_MODULE(scan2cad_rasterizer, m) {
@@ -203,7 +264,26 @@ PYBIND11_MODULE(scan2cad_rasterizer, m) {
 
             .def_property_readonly("visible", &Rasterizer::GetVisible)
 
-            .def("add_model", &ParseAndAddModel);
+            .def("add_model", [](
+                Rasterizer &self,
+                const py::array_t<Rasterizer::Index> &faces,
+                const py::array_t<Rasterizer::Scalar> &vertices,
+                Rasterizer::MeshIndex idx
+            ) {
+                ParseAndAddModel(self, faces, vertices, idx);
+            })
+
+            .def("add_model", [](
+                Rasterizer &self,
+                const py::array_t<Rasterizer::Index> &faces,
+                const py::array_t<Rasterizer::Scalar> &vertices,
+                Rasterizer::MeshIndex idx,
+                const py::array_t<Rasterizer::Scalar> &face_normals
+            ) {
+                ParseAndAddModel(
+                    self, faces, vertices, idx, face_normals
+                );
+            });
 
 #ifdef VERSION_INFO
     m.attr("__version__") = VERSION_INFO;

@@ -283,6 +283,19 @@ PYBIND11_MODULE(scan2cad_rasterizer, m) {
                 ParseAndAddModel(
                     self, faces, vertices, idx, face_normals
                 );
+            })
+
+            .def("add_model", [](
+                Rasterizer &self,
+                const py::array_t<Rasterizer::Index> &faces,
+                const py::array_t<Rasterizer::Scalar> &vertices,
+                Rasterizer::MeshIndex idx,
+                const py::array_t<Rasterizer::Scalar> &to_noc,
+                const py::array_t<Rasterizer::Scalar> &face_normals
+            ) {
+                ParseAndAddModel(
+                    self, faces, vertices, idx, to_noc, face_normals
+                );
             });
 
 #ifdef VERSION_INFO

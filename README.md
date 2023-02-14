@@ -15,7 +15,7 @@ You can now use the library by:
 
 For usage please check the [demo notebook](/tests/demo.ipynb).
 
-This repo is created for the [ROCA](https://niessnerlab.org/projects/guemeli2021roca.html) project. If you find this code helpful, please cite:
+This repo is created for the [ROCA](https://cangumeli.github.io/ROCA/) project. If you find this code helpful, please cite:
 ```
 @article{gumeli2022roca,
   title={ROCA: Robust CAD Model Retrieval and Alignment from a Single Image},
